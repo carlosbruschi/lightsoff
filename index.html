@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lights Off</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <button id="about-button" type="button" class="secondary">Sobre</button>
+    </header>
+
+    <section class="hero">
+      <div>
+        <p class="eyebrow">Jogo de lógica</p>
+        <h1>Lights Off</h1>
+        <p class="description">
+          Apague todas as luzes. Cada clique alterna a casa escolhida e as quatro
+          vizinhas ortogonais.
+        </p>
+      </div>
+
+      <div class="controls">
+        <div class="control">
+          <span>Tabuleiro clássico</span>
+          <div class="control-row">
+            <strong id="size-value">5 x 5</strong>
+            <span class="helper-text">Clique para apagar tudo</span>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="new-game" type="button">Novo jogo</button>
+          <button id="reset-game" type="button" class="secondary">Reiniciar</button>
+          <button id="hint-game" type="button" class="secondary">Dica</button>
+          <button id="solve-game" type="button" class="secondary">Resolver</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="status-panel">
+      <div class="status-card">
+        <span>Movimentos</span>
+        <strong id="moves">0</strong>
+      </div>
+      <div class="status-card">
+        <span>Status</span>
+        <strong id="status">Luzes acesas</strong>
+      </div>
+    </section>
+
+    <section class="board-wrap">
+      <div id="board" class="board" aria-label="Tabuleiro do jogo"></div>
+      <div id="victory-overlay" class="victory-overlay" aria-hidden="true">
+        <div class="victory-message">
+          <p>Vitoria</p>
+          <strong>Todas as luzes foram apagadas</strong>
+          <span>Clique em Novo jogo para jogar novamente</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="about-modal" class="about-modal" aria-hidden="true">
+    <div class="about-card">
+      <button id="close-about" type="button" class="about-close" aria-label="Fechar menu sobre">x</button>
+      <p class="about-eyebrow">Sobre</p>
+      <strong>Lights Off</strong>
+      <span>Criado por Tuco</span>
+      <span>Data de criação: 26/04/2026</span>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
