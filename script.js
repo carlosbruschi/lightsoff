@@ -1,8 +1,9 @@
 const boardElement = document.getElementById("board");
 const sizeValue = document.getElementById("size-value");
 const movesElement = document.getElementById("moves");
-const statusElement = document.getElementById("status");
+const timeLeftElement = document.getElementById("time-left");
 const victoryOverlay = document.getElementById("victory-overlay");
+const defeatOverlay = document.getElementById("defeat-overlay");
 const aboutButton = document.getElementById("about-button");
 const aboutModal = document.getElementById("about-modal");
 const closeAboutButton = document.getElementById("close-about");
@@ -10,6 +11,16 @@ const newGameButton = document.getElementById("new-game");
 const resetGameButton = document.getElementById("reset-game");
 const hintGameButton = document.getElementById("hint-game");
 const solveGameButton = document.getElementById("solve-game");
+const hintCountElement = document.getElementById("hint-count");
+const difficultyButtons = {
+  easy: document.getElementById("difficulty-easy"),
+  medium: document.getElementById("difficulty-medium"),
+  hard: document.getElementById("difficulty-hard"),
+};
+const modeButtons = {
+  classic: document.getElementById("mode-classic"),
+  timed: document.getElementById("mode-timed"),
+};
 
 const COLORS = {
   on: "yellow",
@@ -25,6 +36,21 @@ let moves = 0;
 let solved = false;
 let hintMove = null;
 let solving = false;
+let previousBoard = null;
+let lastChangedCells = new Set();
+let difficulty = "easy";
+let remainingHints = Infinity;
+let mode = "classic";
+let timeLeft = null;
+let timerId = null;
+let gameOver = false;
+let timerStarted = false;
+
+const DIFFICULTY_CONFIG = {
+  easy: { hints: Infinity, time: 180 },
+  medium: { hints: 3, time: 120 },
+  hard: { hints: 0, time: 75 },
+};
 
 function cloneBoard(source) {
   return source.map((row) => [...row]);
@@ -32,6 +58,14 @@ function cloneBoard(source) {
 
 function toggleColor(color) {
   return color === COLORS.on ? COLORS.off : COLORS.on;
+}
+
+function boardKey(row, column) {
+  return `${row}:${column}`;
+}
+
+function rememberBoardState() {
+  previousBoard = cloneBoard(board);
 }
 
 function createBoard(nextSize) {
@@ -62,10 +96,21 @@ function updateStatus() {
   solved = board.every((row) => row.every((cell) => cell === COLORS.off));
 
   movesElement.textContent = String(moves);
-  statusElement.textContent = solved ? "Todas apagadas" : "Luzes acesas";
+  hintCountElement.textContent = Number.isFinite(remainingHints) ? String(remainingHints) : "Infinitas";
+  timeLeftElement.textContent = mode === "timed" ? formatTime(timeLeft) : "Livre";
+  timeLeftElement.classList.toggle("warning", mode === "timed" && timeLeft <= 15 && !solved && !gameOver);
   boardElement.classList.toggle("solved", solved);
   victoryOverlay.classList.toggle("visible", solved);
   victoryOverlay.setAttribute("aria-hidden", solved ? "false" : "true");
+  defeatOverlay.classList.toggle("visible", gameOver);
+  defeatOverlay.setAttribute("aria-hidden", gameOver ? "false" : "true");
+  hintGameButton.disabled = solving || remainingHints === 0 || gameOver;
+  solveGameButton.disabled = solving || gameOver || mode === "timed";
+}
+
+function resetHintButtonState() {
+  hintGameButton.disabled = DIFFICULTY_CONFIG[difficulty].hints === 0;
+  hintGameButton.blur();
 }
 
 function renderBoard() {
@@ -79,12 +124,21 @@ function renderBoard() {
       button.type = "button";
       button.className = `cell ${color}`;
       button.style.setProperty("--blink-delay", `${Math.floor(Math.random() * 480)}ms`);
+      if (lastChangedCells.has(boardKey(rowIndex, columnIndex))) {
+        button.classList.add("changed");
+      }
       if (hintMove && hintMove.row === rowIndex && hintMove.column === columnIndex && !solved) {
         button.classList.add("hint");
       }
       if (solved) {
         button.classList.add("celebrate");
       }
+
+      const surface = document.createElement("span");
+      surface.className = "cell-surface";
+      surface.setAttribute("aria-hidden", "true");
+      button.appendChild(surface);
+
       button.setAttribute(
         "aria-label",
         `Linha ${rowIndex + 1}, coluna ${columnIndex + 1}, luz ${
@@ -97,6 +151,7 @@ function renderBoard() {
   });
 
   updateStatus();
+  lastChangedCells.clear();
 }
 
 function getAffectedCells(row, column, boardSize = size) {
@@ -120,18 +175,42 @@ function applyMove(targetBoard, row, column, boardSize = size) {
   });
 }
 
-function handleMove(row, column) {
-  if (solved || solving) {
+function captureChangedCells() {
+  lastChangedCells.clear();
+
+  if (!previousBoard) {
     return;
   }
 
+  board.forEach((row, rowIndex) => {
+    row.forEach((cell, columnIndex) => {
+      if (previousBoard[rowIndex][columnIndex] !== cell) {
+        lastChangedCells.add(boardKey(rowIndex, columnIndex));
+      }
+    });
+  });
+}
+
+function handleMove(row, column) {
+  if (solved || solving || gameOver) {
+    return;
+  }
+
+  if (mode === "timed" && !timerStarted) {
+    timerStarted = true;
+    startTimer();
+  }
+
   hintMove = null;
+  rememberBoardState();
   applyMove(board, row, column);
+  captureChangedCells();
   moves += 1;
   renderBoard();
 }
 
 function startNewGame() {
+  stopTimer();
   size = BOARD_SIZE;
   sizeValue.textContent = `${size} x ${size}`;
   board = createBoard(size);
@@ -139,14 +218,29 @@ function startNewGame() {
   moves = 0;
   hintMove = null;
   solving = false;
+  previousBoard = null;
+  lastChangedCells.clear();
+  remainingHints = DIFFICULTY_CONFIG[difficulty].hints;
+  timeLeft = mode === "timed" ? DIFFICULTY_CONFIG[difficulty].time : null;
+  gameOver = false;
+  timerStarted = false;
+  resetHintButtonState();
   renderBoard();
 }
 
 function resetGame() {
+  stopTimer();
   board = cloneBoard(initialBoard);
   moves = 0;
   hintMove = null;
   solving = false;
+  previousBoard = null;
+  lastChangedCells.clear();
+  remainingHints = DIFFICULTY_CONFIG[difficulty].hints;
+  timeLeft = mode === "timed" ? DIFFICULTY_CONFIG[difficulty].time : null;
+  gameOver = false;
+  timerStarted = false;
+  resetHintButtonState();
   renderBoard();
 }
 
@@ -216,12 +310,15 @@ function solveCurrentBoard() {
 }
 
 function showHint() {
-  if (solved || solving) {
+  if (solved || solving || remainingHints === 0) {
     return;
   }
 
   const solution = solveCurrentBoard();
   hintMove = solution && solution.length > 0 ? solution[0] : null;
+  if (hintMove && Number.isFinite(remainingHints)) {
+    remainingHints -= 1;
+  }
   renderBoard();
 }
 
@@ -234,9 +331,11 @@ function runSolver(stepIndex, solutionMoves) {
   }
 
   const { row, column } = solutionMoves[stepIndex];
+  rememberBoardState();
   applyMove(board, row, column);
+  captureChangedCells();
   moves += 1;
-  hintMove = { row, column };
+  hintMove = null;
   renderBoard();
 
   window.setTimeout(() => {
@@ -245,7 +344,7 @@ function runSolver(stepIndex, solutionMoves) {
 }
 
 function solveBoardAnimated() {
-  if (solved || solving) {
+  if (solved || solving || gameOver || mode === "timed") {
     return;
   }
 
@@ -261,6 +360,74 @@ function solveBoardAnimated() {
 function setAboutModalVisible(isVisible) {
   aboutModal.classList.toggle("visible", isVisible);
   aboutModal.setAttribute("aria-hidden", isVisible ? "false" : "true");
+}
+
+function formatTime(totalSeconds) {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function stopTimer() {
+  if (timerId) {
+    window.clearInterval(timerId);
+    timerId = null;
+  }
+}
+
+function onTimeExpired() {
+  stopTimer();
+  gameOver = true;
+  hintMove = null;
+  solving = false;
+  renderBoard();
+}
+
+function startTimer() {
+  stopTimer();
+
+  if (mode !== "timed" || solved || gameOver || !timerStarted) {
+    return;
+  }
+
+  timerId = window.setInterval(() => {
+    if (solved || gameOver) {
+      stopTimer();
+      return;
+    }
+
+    timeLeft -= 1;
+
+    if (timeLeft <= 0) {
+      timeLeft = 0;
+      onTimeExpired();
+      return;
+    }
+
+    updateStatus();
+  }, 1000);
+}
+
+function setDifficulty(nextDifficulty) {
+  difficulty = nextDifficulty;
+
+  Object.entries(difficultyButtons).forEach(([key, button]) => {
+    button.classList.toggle("active", key === difficulty);
+    button.setAttribute("aria-pressed", key === difficulty ? "true" : "false");
+  });
+
+  startNewGame();
+}
+
+function setMode(nextMode) {
+  mode = nextMode;
+
+  Object.entries(modeButtons).forEach(([key, button]) => {
+    button.classList.toggle("active", key === mode);
+    button.setAttribute("aria-pressed", key === mode ? "true" : "false");
+  });
+
+  startNewGame();
 }
 
 newGameButton.addEventListener("click", () => {
@@ -279,6 +446,26 @@ solveGameButton.addEventListener("click", () => {
   solveBoardAnimated();
 });
 
+difficultyButtons.easy.addEventListener("click", () => {
+  setDifficulty("easy");
+});
+
+difficultyButtons.medium.addEventListener("click", () => {
+  setDifficulty("medium");
+});
+
+difficultyButtons.hard.addEventListener("click", () => {
+  setDifficulty("hard");
+});
+
+modeButtons.classic.addEventListener("click", () => {
+  setMode("classic");
+});
+
+modeButtons.timed.addEventListener("click", () => {
+  setMode("timed");
+});
+
 aboutButton.addEventListener("click", () => {
   setAboutModalVisible(true);
 });
@@ -293,4 +480,5 @@ aboutModal.addEventListener("click", (event) => {
   }
 });
 
-startNewGame();
+setDifficulty("easy");
+setMode("classic");
